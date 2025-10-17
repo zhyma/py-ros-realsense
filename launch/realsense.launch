@@ -3,6 +3,7 @@
   <!-- Replace with your RealSense serial number here-->
   <arg name="rs_serial_no" default="851112063978"/>
   
+  <!--Replace your node name if needed-->
   <node name="front_cam" pkg="py-ros-realsense" type="main.py" respawn="false" output="screen">
     <param name="rs_serial_no" type="string" value="$(arg rs_serial_no)"/>
   </node>

@@ -3,23 +3,15 @@
 # Covert raw RealSense Depth data to RViz PointCloud2 data
 # Use Pyrealsense2 to obtain RS data, no launch file is needed
 
-import sys, copy, time, cv2
-
-import pyrealsense2 as rs
-from cv_bridge import CvBridge, CvBridgeError
-
-
+import os, sys, copy, time, cv2, threading
 import numpy as np
-
 import rospy
 
+from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CameraInfo, PointCloud2, PointField
+from std_srvs.srv import Trigger, TriggerResponse
 
-## convert RealSense depth data to ROS PointCloud2
-import struct
-from sensor_msgs import point_cloud2
-from std_msgs.msg import Header
-
+import pyrealsense2 as rs
 
 class rs_get():
     def __init__(self, serial, alias="", width = 1280, height = 720):
@@ -62,6 +54,11 @@ class rs_get():
         self.color_raw = None
         self.depth_raw = None
         self.get_rgbd()
+
+        self.recording = False
+        self.lock = threading.Lock()
+        self.start_srv = rospy.Service(self.alias+"/start_recording", Trigger, self.start_recording)
+        self.stop_srv  = rospy.Service(self.alias+"/stop_recording",  Trigger, self.stop_recording)
 
     def set_config(self, config):
         ## config = "Default", "High Accuracy", "High Density"
@@ -118,6 +115,12 @@ class rs_get():
 
             self.color_img = color_image
             self.depth_1d = depth_image
+
+            with self.lock:
+                if self.out is not None:
+                    # frame = self.bridge.imgmsg_to_cv2(color_image, "bgr8")
+                    # self.out.write(frame)
+                    self.out.write(self.color_img)
             return 1
 
         except:
@@ -128,13 +131,55 @@ class rs_get():
         self.image_pub.publish(img_msg)
         depth_msg = self.bridge.cv2_to_imgmsg(self.depth_1d)
         self.depth_pub.publish(depth_msg)
+        cam_info = CameraInfo()
+        cam_info.width = self.color_img.shape[1]
+        cam_info.height = self.color_img.shape[0]
+        cam_info.header.frame_id = "camera_link"
+        cam_info.K = self.k
+        self.k_pub.publish(cam_info)
+
+    def start_recording(self, req):
+        with self.lock:
+            if self.recording:
+                return TriggerResponse(success=False, message="Already recording")
+
+            # fourcc = cv2.VideoWriter_fourcc(*'XVID')
+            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            cwd = os.getcwd()
+            filename = time.strftime("%m-%d_%H-%M-%S", time.localtime(time.time()))
+            print(cwd+"/"+filename+".avi")
+            self.out = cv2.VideoWriter(cwd+"/"+filename+".avi", fourcc, 30.0, (self.width,self.height))
+            self.recording = True
+
+        rospy.loginfo("Recording started.")
+        return TriggerResponse(success=True, message="Recording started.")
+
+    def stop_recording(self, req):
+        with self.lock:
+            if not self.recording:
+                return TriggerResponse(success=False, message="Not recording.")
+            self.recording = False
+            self.out.release()
+            self.out = None
+
+        rospy.loginfo("Recording stopped.")
+        return TriggerResponse(success=True, message="Recording stopped.")
+
 
 if __name__ == '__main__':
     print(cv2.__version__)
     rospy.init_node("d405", anonymous = True)
     np.set_printoptions(suppress=True)
 
-    front_cam = rs_get("851112063978", alias="front_cam")
+    serial_no = rospy.get_param("~rs_serial_no", None)
+    if serial_no is None:
+        rospy.logwarn("NO serial number IS PROVIDED!")
+        serial_no = "851112063978"
+    else:
+        print("Get serial number from parameters: "+serial_no)
+
+    alias = rospy.get_name()
+    front_cam = rs_get(serial_no, alias=alias)
 
     rospy.sleep(1)
     rate = rospy.Rate(30)
