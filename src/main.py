@@ -10,6 +10,7 @@ import rospy
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CameraInfo, PointCloud2, PointField
 from std_srvs.srv import Trigger, TriggerResponse
+from py_ros_realsense.srv import VideoRecording, VideoRecordingResponse
 
 import pyrealsense2 as rs
 
@@ -57,8 +58,10 @@ class rs_get():
 
         self.recording = False
         self.lock = threading.Lock()
-        self.start_srv = rospy.Service(self.alias+"/start_recording", Trigger, self.start_recording)
+        # self.start_srv = rospy.Service(self.alias+"/start_recording", Trigger, self.start_recording)
         self.stop_srv  = rospy.Service(self.alias+"/stop_recording",  Trigger, self.stop_recording)
+        self.start_srv = rospy.Service(self.alias+"/start_recording", VideoRecording, self.start_recording)
+        # self.stop_srv  = rospy.Service(self.alias+"/stop_recording",  VideoRecording, self.stop_recording)
 
     def set_config(self, config):
         ## config = "Default", "High Accuracy", "High Density"
@@ -141,29 +144,38 @@ class rs_get():
     def start_recording(self, req):
         with self.lock:
             if self.recording:
-                return TriggerResponse(success=False, message="Already recording")
+                # return TriggerResponse(success=False, message="Already recording")
+                return VideoRecordingResponse(success=False, message="Already recording")
+
 
             # fourcc = cv2.VideoWriter_fourcc(*'XVID')
             fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-            cwd = os.getcwd()
+            
             filename = time.strftime("%m-%d_%H-%M-%S", time.localtime(time.time()))
-            print(cwd+"/"+filename+".avi")
-            self.out = cv2.VideoWriter(cwd+"/"+filename+".avi", fourcc, 30.0, (self.width,self.height))
+            if req.path in ["", None]:
+                cwd = os.path.dirname(os.path.abspath(__file__))+"/debug/"
+            else:
+                cwd = req.path + '/'
+            rospy.loginfo("Video saves to: "+cwd+filename+".avi")
+            self.out = cv2.VideoWriter(cwd+filename+".avi", fourcc, 30.0, (self.width,self.height))
             self.recording = True
 
         rospy.loginfo("Recording started.")
-        return TriggerResponse(success=True, message="Recording started.")
+        # return TriggerResponse(success=True, message="Recording started.")
+        return VideoRecordingResponse(success=True, message="Recording started.")
 
     def stop_recording(self, req):
         with self.lock:
             if not self.recording:
-                return TriggerResponse(success=False, message="Not recording.")
+                # return TriggerResponse(success=False, message="Not recording.")
+                return VideoRecordingResponse(success=False, message="Not recording.")
             self.recording = False
             self.out.release()
             self.out = None
 
         rospy.loginfo("Recording stopped.")
         return TriggerResponse(success=True, message="Recording stopped.")
+        # return VideoRecordingResponse(success=True, message="Recording stopped.")
 
 
 if __name__ == '__main__':
