@@ -6,7 +6,7 @@
 *.bak
 *.avi
 *.mp4
-src/debug/
+src/debug/*
 !src/debug/.gitkeep
 
 
