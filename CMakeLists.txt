@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(py-ros-realsense)
+project(py_ros_realsense)
  
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -33,6 +33,11 @@ include_directories(
 #  FILES
 #    CylinderProperties.msg
 #)
+
+add_service_files(
+  FILES
+    VideoRecording.srv
+)
 
 generate_messages(
   DEPENDENCIES
